@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
 
     const response = await fetch('https://api.remove.bg/v1.0/removebg', {
       method: 'POST',
-      headers: {
+      headers: new Headers({
         'X-Api-Key': REMOVE_BG_API_KEY,
       },
       body: removeBgFormData,
@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
     // Return the processed image
     return new NextResponse(blob, {
       status: 200,
-      headers: {
+      headers: new Headers({
         'Content-Type': 'image/png',
         'Content-Disposition': 'attachment; filename="removed-bg.png"',
       },
