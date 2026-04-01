@@ -5,6 +5,20 @@ import { useSession, signIn, signOut } from 'next-auth/react';
 
 type ProcessingState = 'idle' | 'processing' | 'success' | 'error';
 
+interface UserStats {
+  user: {
+    id: string;
+    email: string;
+    name?: string;
+    avatar_url?: string;
+    created_at: string;
+  };
+  usage: {
+    images_processed: number;
+    last_processed_at: string;
+  };
+}
+
 export default function Home() {
   const { data: session, status } = useSession();
   const [file, setFile] = useState<File | null>(null);
@@ -13,8 +27,28 @@ export default function Home() {
   const [state, setState] = useState<ProcessingState>('idle');
   const [error, setError] = useState<string>('');
   const [isDragging, setIsDragging] = useState(false);
+  const [userStats, setUserStats] = useState<UserStats | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch user stats on login
+  useEffect(() => {
+    if (session?.user) {
+      fetchUserStats();
+    }
+  }, [session]);
+
+  const fetchUserStats = async () => {
+    try {
+      const response = await fetch('/api/user/stats');
+      if (response.ok) {
+        const data = await response.json();
+        setUserStats(data.result);
+      }
+    } catch (error) {
+      console.error('Failed to fetch user stats:', error);
+    }
+  };
 
   const validateFile = (file: File): string | null => {
     const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
@@ -97,6 +131,9 @@ export default function Home() {
       const url = URL.createObjectURL(blob);
       setResultUrl(url);
       setState('success');
+
+      // Refresh stats after successful processing
+      await fetchUserStats();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '处理失败，请稍后重试';
       setError(errorMessage);
@@ -152,6 +189,11 @@ export default function Home() {
                   <div className="text-xs text-gray-500 dark:text-gray-400">
                     {session.user?.email}
                   </div>
+                  {userStats && (
+                    <div className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">
+                      已处理 {userStats.usage.images_processed} 张图片
+                    </div>
+                  )}
                 </div>
                 {session.user?.image && (
                   <img
@@ -206,6 +248,30 @@ export default function Home() {
             <p className="text-yellow-700 dark:text-yellow-300">
               请使用 Google 账号登录后使用背景移除功能
             </p>
+          </div>
+        )}
+
+        {/* User Stats Card */}
+        {session && userStats && (
+          <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl p-4 mb-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <div className="text-sm text-indigo-600 dark:text-indigo-400 mb-1">
+                  使用统计
+                </div>
+                <div className="text-2xl font-bold text-indigo-900 dark:text-indigo-200">
+                  {userStats.usage.images_processed} 张
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-indigo-600 dark:text-indigo-400 mb-1">
+                  上次使用
+                </div>
+                <div className="text-sm font-medium text-indigo-900 dark:text-indigo-200">
+                  {new Date(userStats.usage.last_processed_at).toLocaleDateString('zh-CN')}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

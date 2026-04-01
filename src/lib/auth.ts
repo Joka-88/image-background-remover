@@ -21,9 +21,7 @@ export const authOptions: NextAuthOptions = {
         token.email = user.email;
         token.name = user.name;
         token.image = user.image;
-      }
-      if (account) {
-        token.provider = account.provider;
+        token.provider = account?.provider;
       }
       return token;
     },
@@ -35,6 +33,30 @@ export const authOptions: NextAuthOptions = {
         session.user.image = token.image as string;
       }
       return session;
+    },
+    async signIn({ user, account }) {
+      if (account?.provider === 'google' && user.email) {
+        // Save user to D1 database via Cloudflare Worker
+        try {
+          const response = await fetch(`${process.env.WORKER_URL}/api/user/create-or-update`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              googleId: account.providerAccountId || user.id,
+              email: user.email,
+              name: user.name,
+              avatarUrl: user.image,
+            }),
+          });
+
+          if (!response.ok) {
+            console.error('Failed to save user to database');
+          }
+        } catch (error) {
+          console.error('Error saving user to database:', error);
+        }
+      }
+      return true;
     },
   },
   secret: process.env.NEXTAUTH_SECRET,

@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
 
 const REMOVE_BG_API_KEY = process.env.REMOVE_BG_API_KEY;
+const WORKER_URL = process.env.WORKER_URL;
 
 if (!REMOVE_BG_API_KEY) {
   throw new Error('REMOVE_BG_API_KEY environment variable is not set');
@@ -11,6 +14,15 @@ if (!REMOVE_BG_API_KEY) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: '请先登录' },
+        { status: 401 }
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get('image_file') as File;
 
@@ -50,7 +62,7 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       headers: new Headers({
         'X-Api-Key': REMOVE_BG_API_KEY,
-      },
+      }),
       body: removeBgFormData,
     });
 
@@ -94,13 +106,26 @@ export async function POST(request: NextRequest) {
     // Get the processed image as blob
     const blob = await response.blob();
 
+    // Increment usage count in D1 database via Worker
+    if (WORKER_URL && session.user.id) {
+      try {
+        await fetch(`${WORKER_URL}/api/user/increment-usage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: session.user.id }),
+        });
+      } catch (error) {
+        console.error('Failed to increment usage:', error);
+      }
+    }
+
     // Return the processed image
     return new NextResponse(blob, {
       status: 200,
       headers: new Headers({
         'Content-Type': 'image/png',
         'Content-Disposition': 'attachment; filename="removed-bg.png"',
-      },
+      }),
     });
   } catch (error) {
     console.error('Error processing image:', error);
