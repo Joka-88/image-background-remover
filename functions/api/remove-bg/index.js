@@ -33,9 +33,21 @@ function getAuthConfig(env) {
 }
 
 async function getSession(request, env) {
+  // Use Auth.js action=session to get the current session
+  const url = new URL(request.url);
+  url.pathname = '/api/auth/session';
+  const sessionRequest = new Request(url.toString(), {
+    headers: request.headers,
+    method: 'GET',
+  });
   const config = getAuthConfig(env);
-  const { raw } = await import('@auth/core');
-  return Auth(request, { ...config, raw: true });
+  const response = await Auth(sessionRequest, config);
+  if (response.status !== 200) return null;
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
 }
 
 export const onRequest = async (context) => {
@@ -117,6 +129,7 @@ export const onRequest = async (context) => {
 
     const blob = await response.blob();
 
+    // Increment usage in D1
     if (session.user.id) {
       try {
         await env.DB.prepare(
