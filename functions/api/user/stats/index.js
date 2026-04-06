@@ -3,27 +3,54 @@
  * Handles GET /api/user/stats
  */
 import { Auth } from '@auth/core';
-import { getAuthConfig } from '../../_shared/auth.js';
+import Google from '@auth/core/providers/google';
+import { D1Adapter } from '@auth/d1-adapter';
+
+function getAuthConfig(env) {
+  return {
+    providers: [
+      Google({
+        clientId: env.GOOGLE_CLIENT_ID,
+        clientSecret: env.GOOGLE_CLIENT_SECRET,
+      }),
+    ],
+    adapter: new D1Adapter(env.DB),
+    session: { strategy: 'jwt' },
+    callbacks: {
+      async jwt({ token, user }) {
+        if (user) { token.id = user.id; }
+        return token;
+      },
+      async session({ session, token }) {
+        if (session.user) { session.user.id = token.id; }
+        return session;
+      },
+    },
+    secret: env.NEXTAUTH_SECRET,
+    trustHost: true,
+    basePath: '/api/auth',
+  };
+}
+
+async function getSession(request, env) {
+  const config = getAuthConfig(env);
+  const { raw } = await import('@auth/core');
+  return Auth(request, { ...config, raw: true });
+}
 
 export const onRequest = async (context) => {
   const request = context.request;
   const env = context.env;
 
-  // Check auth via @auth/core session
-  const config = getAuthConfig(env);
-  const sessionRes = await Auth(request, { ...config, raw: true });
-  const session = sessionRes?.body ? await new Response(sessionRes.body).json() : null;
-
+  const session = await getSession(request, env);
   if (!session?.user) {
     return new Response(JSON.stringify({ error: '请先登录' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
+      status: 401, headers: { 'Content-Type': 'application/json' },
     });
   }
 
   try {
     const userId = session.user.id;
-
     const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(userId).first();
 
     let stats = await env.DB.prepare('SELECT * FROM usage_stats WHERE user_id = ?').bind(userId).first();
@@ -41,10 +68,9 @@ export const onRequest = async (context) => {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Error fetching stats:', error);
+    console.error('Stats error:', error);
     return new Response(JSON.stringify({ error: '获取统计失败' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      status: 500, headers: { 'Content-Type': 'application/json' },
     });
   }
 };
