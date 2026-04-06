@@ -1,14 +1,8 @@
 name = "image-background-remover"
-main = "src/worker.ts"
 compatibility_date = "2024-01-01"
-node_compat = true
 
 # D1 Database Binding
 [[d1_databases]]
 binding = "DB"
-database_name = "bg-remover-db"
-database_id = "7300c68b-20cb-4fb2-b058-904261826692"
-
-# Environment variables
-# [vars]
-# NEXTAUTH_URL = "https://backgroundremoverpro.online"
+database_name = "image-bg-remover-auth"
+database_id = "0262a88a-f6c0-48a3-9c09-e5f0b1a99df8"

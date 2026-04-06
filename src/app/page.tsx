@@ -1,9 +1,17 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { useSession, signIn, signOut } from 'next-auth/react';
 
 type ProcessingState = 'idle' | 'processing' | 'success' | 'error';
+
+interface UserSession {
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    image: string;
+  };
+}
 
 interface UserStats {
   user: {
@@ -20,7 +28,8 @@ interface UserStats {
 }
 
 export default function Home() {
-  const { data: session, status } = useSession();
+  const [session, setSession] = useState<UserSession | null>(null);
+  const [loading, setLoading] = useState(true);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
@@ -31,12 +40,35 @@ export default function Home() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch user stats on login
+  // Fetch session on mount
+  useEffect(() => {
+    fetchSession();
+  }, []);
+
+  // Fetch user stats when session is available
   useEffect(() => {
     if (session?.user) {
       fetchUserStats();
     }
   }, [session]);
+
+  const fetchSession = async () => {
+    try {
+      const response = await fetch('/api/auth/session');
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.user) {
+          setSession(data);
+        } else {
+          setSession(null);
+        }
+      }
+    } catch {
+      setSession(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchUserStats = async () => {
     try {
@@ -48,6 +80,14 @@ export default function Home() {
     } catch (error) {
       console.error('Failed to fetch user stats:', error);
     }
+  };
+
+  const handleSignIn = () => {
+    window.location.href = '/api/auth/signin?callbackUrl=/';
+  };
+
+  const handleSignOut = async () => {
+    window.location.href = '/api/auth/signout';
   };
 
   const validateFile = (file: File): string | null => {
@@ -104,7 +144,6 @@ export default function Home() {
   const removeBackground = async () => {
     if (!file) return;
 
-    // 检查是否登录
     if (!session) {
       setError('请先登录后再使用');
       return;
@@ -132,7 +171,6 @@ export default function Home() {
       setResultUrl(url);
       setState('success');
 
-      // Refresh stats after successful processing
       await fetchUserStats();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '处理失败，请稍后重试';
@@ -178,7 +216,7 @@ export default function Home() {
             </p>
           </div>
           <div className="ml-4">
-            {status === 'loading' ? (
+            {loading ? (
               <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
             ) : session ? (
               <div className="flex items-center gap-3">
@@ -203,7 +241,7 @@ export default function Home() {
                   />
                 )}
                 <button
-                  onClick={() => signOut()}
+                  onClick={handleSignOut}
                   className="ml-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium rounded-lg transition-colors"
                 >
                   退出
@@ -211,7 +249,7 @@ export default function Home() {
               </div>
             ) : (
               <button
-                onClick={() => signIn('google')}
+                onClick={handleSignIn}
                 className="flex items-center gap-2 px-6 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-medium rounded-lg shadow-md transition-all"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -239,7 +277,7 @@ export default function Home() {
         </div>
 
         {/* Login Required Notice */}
-        {!session && (
+        {!loading && !session && (
           <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-6 text-center mb-6">
             <div className="text-4xl mb-3">🔐</div>
             <h3 className="text-lg font-semibold text-yellow-800 dark:text-yellow-200 mb-2">
