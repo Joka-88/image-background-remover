@@ -83,7 +83,7 @@ export default function Home() {
   };
 
   const handleSignIn = () => {
-    window.location.href = '/api/auth/signin?callbackUrl=/';
+    window.location.href = '/api/auth/signin/google?callbackUrl=/';
   };
 
   const handleSignOut = async () => {
