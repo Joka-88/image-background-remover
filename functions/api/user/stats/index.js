@@ -2,26 +2,18 @@
  * Cloudflare Pages Function - User stats API
  * Handles GET /api/user/stats
  */
-import { getAuthOptions } from '../../_shared/auth.js';
-import { getServerSession } from 'next-auth';
+import { Auth } from '@auth/core';
+import { getAuthConfig } from '../../_shared/auth.js';
 
 export const onRequest = async (context) => {
   const request = context.request;
   const env = context.env;
 
-  if (request.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      },
-    });
-  }
+  // Check auth via @auth/core session
+  const config = getAuthConfig(env);
+  const sessionRes = await Auth(request, { ...config, raw: true });
+  const session = sessionRes?.body ? await new Response(sessionRes.body).json() : null;
 
-  // Check auth
-  const authOptions = getAuthOptions(env);
-  const session = await getServerSession(authOptions);
   if (!session?.user) {
     return new Response(JSON.stringify({ error: '请先登录' }), {
       status: 401,
@@ -32,10 +24,8 @@ export const onRequest = async (context) => {
   try {
     const userId = session.user.id;
 
-    // Get user from D1
     const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(userId).first();
 
-    // Get or create usage stats
     let stats = await env.DB.prepare('SELECT * FROM usage_stats WHERE user_id = ?').bind(userId).first();
     if (!stats && user) {
       await env.DB.prepare('INSERT INTO usage_stats (user_id, images_processed) VALUES (?, 0)').bind(userId).run();

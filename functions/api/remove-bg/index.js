@@ -2,14 +2,13 @@
  * Cloudflare Pages Function - Remove background API
  * Handles POST /api/remove-bg
  */
-import { getAuthOptions } from '../../_shared/auth.js';
-import { getServerSession } from 'next-auth';
+import { Auth } from '@auth/core';
+import { getAuthConfig } from '../../_shared/auth.js';
 
 export const onRequest = async (context) => {
   const request = context.request;
   const env = context.env;
 
-  // CORS
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       headers: {
@@ -27,9 +26,11 @@ export const onRequest = async (context) => {
     });
   }
 
-  // Check auth
-  const authOptions = getAuthOptions(env);
-  const session = await getServerSession(authOptions);
+  // Check auth via @auth/core session
+  const config = getAuthConfig(env);
+  const sessionRes = await Auth(request, { ...config, raw: true });
+  const session = sessionRes?.body ? await new Response(sessionRes.body).json() : null;
+  
   if (!session?.user) {
     return new Response(JSON.stringify({ error: '请先登录' }), {
       status: 401,
@@ -37,7 +38,6 @@ export const onRequest = async (context) => {
     });
   }
 
-  // Get API key
   const apiKey = env.REMOVE_BG_API_KEY;
   if (!apiKey) {
     return new Response(JSON.stringify({ error: 'API key not configured' }), {
@@ -56,7 +56,6 @@ export const onRequest = async (context) => {
       });
     }
 
-    // Validate file type
     const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!validTypes.includes(file.type)) {
       return new Response(JSON.stringify({ error: '请上传 JPG、PNG 或 WEBP 格式的图片' }), {
@@ -65,7 +64,6 @@ export const onRequest = async (context) => {
       });
     }
 
-    // Validate file size
     if (file.size > 12 * 1024 * 1024) {
       return new Response(JSON.stringify({ error: '图片大小不能超过 12MB' }), {
         status: 400,
@@ -73,7 +71,6 @@ export const onRequest = async (context) => {
       });
     }
 
-    // Call remove.bg API
     const removeBgFormData = new FormData();
     removeBgFormData.append('image_file', file);
     removeBgFormData.append('size', 'auto');
@@ -85,7 +82,6 @@ export const onRequest = async (context) => {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
       let errorMsg = '处理失败，请稍后重试';
       if (response.status === 401) errorMsg = 'API 密钥无效';
       else if (response.status === 402) errorMsg = 'API 额度已用尽';
@@ -103,7 +99,7 @@ export const onRequest = async (context) => {
     if (session.user.id) {
       try {
         await env.DB.prepare(
-          'UPDATE usage_stats SET images_processed = images_processed + 1, last_processed_at = CURRENT_TIMESTAMP WHERE user_id = ?'
+          'INSERT INTO usage_stats (user_id, images_processed) VALUES (?, 1) ON CONFLICT(user_id) DO UPDATE SET images_processed = images_processed + 1, last_processed_at = CURRENT_TIMESTAMP'
         ).bind(session.user.id).run();
       } catch (e) {
         console.error('Failed to update usage:', e);
