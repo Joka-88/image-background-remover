@@ -433,7 +433,7 @@ export default function Home() {
 
           {/* Footer */}
           <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700 text-center text-sm text-gray-500 dark:text-gray-400">
-            <p>使用 remove.bg API 进行图片处理</p>
+            <p>页面由Joka开发</p>
           </div>
         </div>
       </div>
