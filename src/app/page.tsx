@@ -82,8 +82,16 @@ export default function Home() {
     }
   };
 
-  const handleSignIn = () => {
-    window.location.href = '/api/auth/signin/google?callbackUrl=/';
+  const handleSignIn = async () => {
+    // Auth.js requires POST to initiate OAuth flow (sets CSRF + PKCE cookies)
+    const csrfRes = await fetch('/api/auth/csrf');
+    const { csrfToken } = await csrfRes.json();
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/api/auth/signin/google';
+    form.innerHTML = `<input type="hidden" name="csrfToken" value="${csrfToken}"><input type="hidden" name="callbackUrl" value="/">`;
+    document.body.appendChild(form);
+    form.submit();
   };
 
   const handleSignOut = async () => {
